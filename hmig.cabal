@@ -1,0 +1,77 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           hmig
+version:        0.1.0.0
+description:    Please see the README.md
+author:         Maksim Golubev
+maintainer:     maksim.golubev@nexign.com
+copyright:      2023 Maksim Golubev
+license:        BSD3
+build-type:     Simple
+extra-source-files:
+    README.md
+
+library
+  exposed-modules:
+      BitBucket
+      GitLab
+      Lib
+      Prompt
+      Utils
+  other-modules:
+      Paths_hmig
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      aeson
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , entropy
+    , extra
+    , haskeline
+    , http-client
+    , lens
+    , lens-aeson
+    , mtl
+    , network-uri
+    , text
+    , time
+    , uri-encode
+    , utf8-string
+    , wreq
+  default-language: Haskell2010
+
+executable hmig
+  main-is: Main.hs
+  other-modules:
+      Paths_hmig
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , hmig
+    , mtl
+    , network-uri
+    , optparse-applicative
+    , terminal-size
+  default-language: Haskell2010
+
+test-suite hmig-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_hmig
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , hmig
+  default-language: Haskell2010
