@@ -214,7 +214,7 @@ listParser bitbucketAccessToken gitlabAccessToken =
         <*> flag ListImported ListNotImpoted
             ( short 'n'
            <> long notLong
-           <> help "By default, imported repositories will be listed. Use this option if you want to list not imported repositories"
+           <> help "By default, imported GitLab repositories will be listed. Use this option if you want to list not imported BitBucket repositories"
             )
         <*> switch
             ( short 'c'
