@@ -201,7 +201,7 @@ import' cfg = do
 
               do
                 t <- liftIO $ case reposToImport of
-                  [_] -> promptYorN "Shall I import one selected repository"
+                  [_] -> promptYorN "Shall I import ONE selected repository"
                   _ -> promptYorN $ "Shall I import " <> show (length reposToImport) <> " selected repositories"
                 unless t $ liftIO . throwIO . ActionCanceledByUser $ "Migration canceled by user"
 
