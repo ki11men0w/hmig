@@ -269,7 +269,7 @@ importBranchPermissions bitbucketProject bitbucketRepo gitlabRepo = do
           _ -> matcherId
 
     isMigratableBranchPermission bp =
-      isActive && isMatchTypeFit
+      isActive && isMatchTypeFit && not (isIgnored bp)
       where
         isActive = bitbucketBranchPermissionMatcherActive . bitbucketBranchPermissionMatcher $ bp
         isMatchTypeFit =
@@ -277,6 +277,17 @@ importBranchPermissions bitbucketProject bitbucketRepo gitlabRepo = do
             BitbucketBranchPermissionMatcherTypeBranch -> True
             BitbucketBranchPermissionMatcherTypePattern -> True
             _ -> False
+
+        -- Игнорируем полный запрет на изменение любых веток. Это может быть признаком того,
+        -- что репозиторий переведён в режим Read Only после импорта.
+        isIgnored (BitbucketBranchPermission
+                    _
+                    BitbucketBranchPermissionTypeReadOnly
+                    (BitbucketBranchPermissionMatcher
+                      "*"
+                      BitbucketBranchPermissionMatcherTypePattern
+                      _)) = True
+        isIgnored _ = False
 
     deleteAutoCreatedBranches :: [GitlabProtectedBranch] -> CommonApi ()
     deleteAutoCreatedBranches gitlabBranches = do
