@@ -161,6 +161,10 @@ options bitbucketAccessToken gitlabAccessToken = Options
 data ImportOptions = ImportOptions
   { importOptionsCommon :: CommonOptions
   , importOptionsBitbucketUserName :: BitbucketUserName
+  , importOptionsSkipDocpart :: Bool
+  , importOptionsOnlyDocpart :: Bool
+  , importOptionsSkipSubtreeDocpart :: Bool
+  , importOptionsOnlySubtreeDocpart :: Bool
   }
 importParser :: Maybe String -> Maybe String -> Parser Command
 importParser bitbucketAccessToken gitlabAccessToken =
@@ -175,6 +179,39 @@ importParser bitbucketAccessToken gitlabAccessToken =
          <> metavar "USER"
          <> help ("BitBucket user name. Must correspond to BitBucket access token (see option `--" <> bitbucketAccessTokenLong <> "`)")
           )
+      <*> skipDocPartJustParser
+      <*> onlyDocPartJustParser
+      <*> skipDocPartSubtreeParser
+      <*> onlyDocPartSubtreeParser
+
+
+skipDocPartJustParser :: Parser Bool
+skipDocPartJustParser =
+  switch
+  ( long "skip-docpart-just"
+    <> help "Skip BitBucket repositories whose name ends with `_docpart`, and there is a corresponding BitBucket repository with the same name, but without this suffix"
+  )
+
+onlyDocPartJustParser :: Parser Bool
+onlyDocPartJustParser =
+  switch
+  ( long "only-docpart-just"
+    <> help "Only BitBucket repositories whose name ends with `_docpart`, and there is a corresponding BitBucket repository with the same name, but without this suffix"
+  )
+
+skipDocPartSubtreeParser :: Parser Bool
+skipDocPartSubtreeParser =
+  switch
+  ( long "skip-docpart-merged-as-subtree"
+    <> help "Skip BitBucket repositories whose name ends with `_docpart`, and there is a corresponding BitBucket repository with the same name, but without this suffix, that contains commits from `_docpart` repository (probably added there by `git subtree`)"
+  )
+
+onlyDocPartSubtreeParser :: Parser Bool
+onlyDocPartSubtreeParser =
+  switch
+  ( long "only-docpart-merged-as-subtree"
+    <> help "Only BitBucket repositories whose name ends with `_docpart`, and there is a corresponding BitBucket repository with the same name, but without this suffix, that contains commits from `_docpart` repository (probably added there by `git subtree`)"
+  )
 
 data CleanOptions = CleanOptions
   { cleanOptionsCommon :: CommonOptions
@@ -198,6 +235,10 @@ data ListOptions = ListOptions
   , listOptionsMode :: ListMode
   , listOptionsOnlyChanged :: Bool
   , listOptionsSkipChanged :: Bool
+  , listOptionsSkipDocpart :: Bool
+  , listOptionsOnlyDocpart :: Bool
+  , listOptionsSkipSubtreeDocpart :: Bool
+  , listOptionsOnlySubtreeDocpart :: Bool
   }
 listParser :: Maybe String -> Maybe String -> Parser Command
 listParser bitbucketAccessToken gitlabAccessToken =
@@ -226,6 +267,10 @@ listParser bitbucketAccessToken gitlabAccessToken =
            <> long "skip-changed"
            <> help ("Do not list GitLab repositoies with commits that missing in corresponding BitBucket repositories. " <> availableOnlyInImportedMode)
             )
+        <*> skipDocPartJustParser
+        <*> onlyDocPartJustParser
+        <*> skipDocPartSubtreeParser
+        <*> onlyDocPartSubtreeParser
 
 
 uriReader :: ReadM URI
@@ -283,7 +328,6 @@ migrate' (Import opt) = do
   repos <- makeRepoNames (optRepoNames common) (optRepoNamesFile common)
   noRepos <- makeRepoNames (optNoRepoNames common) (optNoRepoNamesFile common)
   let
-    bitbucketUserName = importOptionsBitbucketUserName opt
     cfg =
         ImportConfig
         { importConfigBitbucketAccessToken = optBitbucketAccessToken common
@@ -294,7 +338,11 @@ migrate' (Import opt) = do
         , importConfigGitlabNamespaceName = optGitlabNamespace common
         , importConfigRepoNames = repos
         , importConfigNoRepoNames = noRepos
-        , importConfigBitbucketUserName = bitbucketUserName
+        , importConfigBitbucketUserName = importOptionsBitbucketUserName opt
+        , importConfigBitbucketSkipDocpart = importOptionsSkipDocpart opt
+        , importConfigBitbucketOnlyDocpart = importOptionsOnlyDocpart opt
+        , importConfigBitbucketSkipSubtreeDocpart = importOptionsSkipSubtreeDocpart opt
+        , importConfigBitbucketOnlySubtreeDocpart = importOptionsOnlySubtreeDocpart opt
         }
   import' cfg
     `catch` catchErrorAndExit
@@ -325,9 +373,6 @@ migrate' (List opt) = do
   repos <- makeRepoNames (optRepoNames common) (optRepoNamesFile common)
   noRepos <- makeRepoNames (optNoRepoNames common) (optNoRepoNamesFile common)
   let
-    listMode = listOptionsMode opt
-    onlyChanged = listOptionsOnlyChanged opt
-    skipChanged = listOptionsSkipChanged opt
     cfg =
         ListConfig
         { listConfigBitbucketAccessToken = optBitbucketAccessToken common
@@ -338,9 +383,13 @@ migrate' (List opt) = do
         , listConfigGitlabNamespaceName = optGitlabNamespace common
         , listConfigRepoNames = repos
         , listConfigNoRepoNames = noRepos
-        , listConfigListMode = listMode
-        , listConfigOnlyChanged = onlyChanged
-        , listConfigSkipChanged = skipChanged
+        , listConfigListMode = listOptionsMode opt
+        , listConfigOnlyChanged = listOptionsOnlyChanged opt
+        , listConfigSkipChanged = listOptionsSkipChanged opt
+        , listConfigBitbucketSkipDocpart = listOptionsSkipDocpart opt
+        , listConfigBitbucketOnlyDocpart = listOptionsOnlyDocpart opt
+        , listConfigBitbucketSkipSubtreeDocpart = listOptionsSkipSubtreeDocpart opt
+        , listConfigBitbucketOnlySubtreeDocpart = listOptionsOnlySubtreeDocpart opt
         }
   list' cfg
     `catch` catchErrorAndExit

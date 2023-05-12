@@ -15,6 +15,7 @@ module BitBucket
     , BitbucketBranchPermissionMatcherType(..)
     , BitbucketCommit(..)
     , findCommit
+    , findFirstCommit
     ) where
 
 import Utils (toPath)
@@ -26,7 +27,7 @@ import Data.Aeson hiding (Options)
 import Control.Applicative
 import Network.Wreq.Session as S
 import Network.URI
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, listToMaybe)
 import Control.Exception as E
 import qualified Network.HTTP.Client as HC
 import Data.List (isSuffixOf)
@@ -171,7 +172,7 @@ findProject projectName = do
         (bitbucketDefaults cfg)
         (bitbucketSession cfg)
         (show $ toPath ["projects", projectName] `relativeTo` urlBase_)
-      doIt = (^. responseBody) <$> (asJSON =<<query_)
+      doIt = (^. responseBody) <$> (asJSON =<< query_)
   liftIO (doIt `E.catch` notFoundAndExceptionNameMatch (".NoSuchProjectException" `isSuffixOf`))
 
 findRepo :: BitbucketProject -> String -> BitbucketApi (Maybe BitbucketRepo)
@@ -312,7 +313,7 @@ listBranchPermisions project repo = do
   liftIO $ doIt [] 0
 
 newtype BitbucketCommit = BitbucketCommit
-  { bibucketCommiId :: String
+  { bitbucketCommitId :: String
   } deriving Show
 instance FromJSON BitbucketCommit where
   parseJSON (Object v) =
@@ -321,7 +322,7 @@ instance FromJSON BitbucketCommit where
   parseJSON _ = empty
 
 findCommit :: BitbucketProject -> BitbucketRepo -> String -> BitbucketApi (Maybe BitbucketCommit)
-findCommit project repo commitHash= do
+findCommit project repo commitHash = do
   cfg <- ask
   urlBase_ <- bitbucketRestApiUrlBase
   let query_ =
@@ -333,5 +334,30 @@ findCommit project repo commitHash= do
            , "repos", fromString (bitbucketRepoSlug repo)
            , "commits", fromString commitHash
            ] `relativeTo` urlBase_)
-      doIt = (^. responseBody) <$> (asJSON =<<query_)
+      doIt = (^. responseBody) <$> (asJSON =<< query_)
+  liftIO (doIt `E.catch` notFoundAndExceptionNameMatch (".NoSuchCommitException" `isSuffixOf`))
+
+newtype BitbucketCommits = BitbucketCommits
+  { bitbucketCommitsValues :: [BitbucketCommit]
+  } deriving Show
+instance FromJSON BitbucketCommits where
+  parseJSON (Object v) =
+    BitbucketCommits
+    <$> v .: "values"
+  parseJSON _ = empty
+
+findFirstCommit :: BitbucketProject -> BitbucketRepo -> BitbucketApi (Maybe BitbucketCommit)
+findFirstCommit project repo = do
+  cfg <- ask
+  urlBase_ <- bitbucketRestApiUrlBase
+  let query_ =
+        S.getWith
+        (bitbucketDefaults cfg & param "limit" .~ ["1"])
+        (bitbucketSession cfg)
+        (show $ toPath
+           [ "projects", bitbucketProjectKey project
+           , "repos", fromString (bitbucketRepoSlug repo)
+           , "commits"
+           ] `relativeTo` urlBase_)
+      doIt = listToMaybe . bitbucketCommitsValues . (^. responseBody) <$> (asJSON =<< query_)
   liftIO (doIt `E.catch` notFoundAndExceptionNameMatch (".NoSuchCommitException" `isSuffixOf`))

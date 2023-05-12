@@ -21,11 +21,12 @@ import Network.URI
 import Control.Monad.Reader
 import Control.Monad.State
 import Prompt (PromptVariant(..), PromptVariantConfig(..), promptChar', promptYorN)
-import Data.Maybe (catMaybes, mapMaybe, fromMaybe, isNothing)
+import Data.Maybe (catMaybes, mapMaybe, fromMaybe, isNothing, isJust)
 import Utils (showProgess)
 import Data.Char (toLower, isUpper)
 import Data.Map (fromListWith, toList)
-import Data.List (stripPrefix, sortOn)
+import Data.List (stripPrefix, sortOn, isSuffixOf)
+import Data.List.Extra (stripSuffix)
 import Data.Foldable (find)
 import Control.Concurrent (threadDelay)
 import Control.Exception (Exception, throwIO)
@@ -117,6 +118,22 @@ withNamespaces actionLabel bitbucketProjectName_ gitlabNamespaceName_ action = d
            forM_ actionLabel (liftIO . putStrLn)
            action bitbucketProject gitlabNamespace
 
+docPartSuffix :: String
+docPartSuffix = "_docpart"
+
+isDocPartRepoName :: BitbucketRepo -> Bool
+isDocPartRepoName repo =
+  docPartSuffix `isSuffixOf` ((toLower <$>) . bitbucketRepoSlug $ repo)
+
+isDocPartRepo :: [BitbucketRepo] -> BitbucketRepo -> Bool
+isDocPartRepo allBibucketRepos repo =
+  isJust $ findMainRepoForDocPartRepo allBibucketRepos repo
+
+findMainRepoForDocPartRepo :: [BitbucketRepo] -> BitbucketRepo -> Maybe BitbucketRepo
+findMainRepoForDocPartRepo allBibucketRepos repo =
+  stripSuffix docPartSuffix ((toLower <$>) . bitbucketRepoSlug $ repo)
+  >>= \rn -> find (\e -> rn == (toLower <$> bitbucketRepoSlug e)) allBibucketRepos
+
 type BitbucketUserName = String
 
 data ImportConfig = ImportConfig
@@ -129,6 +146,10 @@ data ImportConfig = ImportConfig
   , importConfigRepoNames :: Maybe [String]
   , importConfigNoRepoNames :: Maybe [String]
   , importConfigBitbucketUserName :: BitbucketUserName
+  , importConfigBitbucketSkipDocpart :: Bool
+  , importConfigBitbucketOnlyDocpart :: Bool
+  , importConfigBitbucketSkipSubtreeDocpart :: Bool
+  , importConfigBitbucketOnlySubtreeDocpart :: Bool
   } deriving Show
 
 import' :: ImportConfig -> IO ()
@@ -146,19 +167,36 @@ import' cfg = do
         (importConfigGitlabNamespaceName cfg)
         $ \bitbucketProject gitlabNamespace -> do
           gitlabRepos' <- sortOn gitlabRepoPath <$> runGitlabApi (GL.findRepos gitlabNamespace Nothing)
-          bitbucketRepos' <-
-            sortOn bitbucketRepoSlug
-            . filter (not . filterBBSameName gitlabRepos')
-            . filter (filterBitbucketReposByCommandLineOption True (importConfigRepoNames cfg))
-            . filter (not . filterBitbucketReposByCommandLineOption False (importConfigNoRepoNames cfg))
-            <$> runBitbucketApi (BB.listProjectRepos bitbucketProject)
-          case bitbucketRepos' of
+          bitbucketRepos' <- runBitbucketApi (BB.listProjectRepos bitbucketProject)
+          bitbucketReposToImport <-
+            filterM
+              (\bbr -> do
+                  if importConfigBitbucketSkipSubtreeDocpart cfg
+                    then isBitbucketSkipSubtreeDocpart bitbucketProject bitbucketRepos' bbr
+                    else return True
+              )
+              (sortOn bitbucketRepoSlug
+               . filter (\r -> not (importConfigBitbucketSkipDocpart cfg && isDocPartRepo bitbucketRepos' r))
+               . filter (\r -> not (importConfigBitbucketOnlyDocpart cfg) || isDocPartRepo bitbucketRepos' r)
+               . filter (not . filterBBSameName gitlabRepos')
+               . filter (filterBitbucketReposByCommandLineOption True (importConfigRepoNames cfg))
+               . filter (not . filterBitbucketReposByCommandLineOption False (importConfigNoRepoNames cfg))
+               $ bitbucketRepos')
+            >>=
+            filterM
+              (\bbr -> do
+                  if importConfigBitbucketOnlySubtreeDocpart cfg
+                    then isBitbucketOnlySubtreeDocpart bitbucketProject bitbucketRepos' bbr
+                    else return True
+              )
+
+          case bitbucketReposToImport of
             [] -> liftIO . throwIO . NothingToDo $ "No BitBucket repository was found that meets the selection criteria"
             _ -> do
               reposToImport <-
                 fmap catMaybes $
-                  flip evalStateT (ProcessingContext 0 (length bitbucketRepos') ProcessingStateCommon) $
-                    prompt `mapM` bitbucketRepos'
+                  flip evalStateT (ProcessingContext 0 (length bitbucketReposToImport) ProcessingStateCommon) $
+                    prompt `mapM` bitbucketReposToImport
 
               when (null reposToImport) $ liftIO . throwIO . NothingToDo $ "Nothing selected"
 
@@ -333,6 +371,10 @@ findTheSameByName :: [BitbucketRepo] -> GitlabRepo -> Maybe BitbucketRepo
 findTheSameByName bitbucketRepos gitlabRepo =
   find (`isTheSameRepos` gitlabRepo) bitbucketRepos
 
+findTheSameByName' :: [GitlabRepo] -> BitbucketRepo -> Maybe GitlabRepo
+findTheSameByName' gitlabRepos bitbucketRepo =
+  find (bitbucketRepo `isTheSameRepos`) gitlabRepos
+
 filterBBSameName :: [GitlabRepo] -> BitbucketRepo -> Bool
 filterBBSameName gitlabRepos br =
   any (isTheSameRepos br) gitlabRepos
@@ -485,45 +527,100 @@ data ListConfig = ListConfig
   , listConfigListMode :: ListMode
   , listConfigOnlyChanged :: Bool
   , listConfigSkipChanged :: Bool
+  , listConfigBitbucketSkipDocpart :: Bool
+  , listConfigBitbucketOnlyDocpart :: Bool
+  , listConfigBitbucketSkipSubtreeDocpart :: Bool
+  , listConfigBitbucketOnlySubtreeDocpart :: Bool
   } deriving Show
 
 list' :: ListConfig -> IO ()
-list' o = do
-  bitbucketCfg <- newBitbucketApiConfig (listConfigBitbucketUrlBase o) (listConfigBitbucketAccessToken o)
-  gitlabCfg <- newGitlabApiConfig (listConfigGitlabUrlBase o) (listConfigGitlabAccessToken o)
+list' cfg = do
+  bitbucketCfg <- newBitbucketApiConfig (listConfigBitbucketUrlBase cfg) (listConfigBitbucketAccessToken cfg)
+  gitlabCfg <- newGitlabApiConfig (listConfigGitlabUrlBase cfg) (listConfigGitlabAccessToken cfg)
   runReaderT (runReaderT doIt bitbucketCfg) gitlabCfg
   where
     doIt :: CommonApi ()
     doIt =
       withNamespaces
         Nothing
-        (listConfigBitbucketProjectName o) (listConfigGitlabNamespaceName o) $
+        (listConfigBitbucketProjectName cfg) (listConfigGitlabNamespaceName cfg) $
         \bitbucketProject gitlabNamespace ->
-          case listConfigListMode o of
+          case listConfigListMode cfg of
             ListImported -> do
-              bitbucketRepos <- runBitbucketApi (BB.listProjectRepos bitbucketProject)
+              bitbucketRepos' <- runBitbucketApi (BB.listProjectRepos bitbucketProject)
               imported <-
                 runGitlabApi (GL.findRepos gitlabNamespace Nothing)
-                >>= filterM
-                      (\(glr, bbr) -> do
-                          wasChanged <- wasGitlabRepoChangedSinceImported glr bitbucketProject bbr
-                          return $
-                            (not (listConfigOnlyChanged o) || wasChanged)
-                            &&
-                            (not (listConfigSkipChanged o) || not wasChanged))
+                >>=
+                filterM
+                  (\(glr, bbr) -> do
+                       wasChanged <- wasGitlabRepoChangedSinceImported glr bitbucketProject bbr
+                       return $
+                         (not (listConfigOnlyChanged cfg) || wasChanged)
+                         &&
+                         (not (listConfigSkipChanged cfg) || not wasChanged))
                     . sortOn (gitlabRepoPath . fst)
-                    . filter (filterGitlabReposByCommandLineOption True (listConfigRepoNames o) . fst)
-                    . filter (not . filterGitlabReposByCommandLineOption False (listConfigNoRepoNames o) . fst)
-                    . mapMaybe (\glr -> findTheSameByName bitbucketRepos glr >>= \bbr -> Just (glr, bbr))
+                    . filter (filterGitlabReposByCommandLineOption True (listConfigRepoNames cfg) . fst)
+                    . filter (not . filterGitlabReposByCommandLineOption False (listConfigNoRepoNames cfg) . fst)
+                    . mapMaybe (\glr -> findTheSameByName bitbucketRepos' glr >>= \bbr -> Just (glr, bbr))
+                >>=
+                filterM
+                  (\(_, bbr) ->
+                      if listConfigBitbucketOnlySubtreeDocpart cfg
+                        then isBitbucketOnlySubtreeDocpart bitbucketProject bitbucketRepos' bbr
+                        else return True
+                  )
+                >>=
+                filterM
+                  (\(_, bbr) ->
+                      if listConfigBitbucketSkipSubtreeDocpart cfg
+                        then isBitbucketSkipSubtreeDocpart bitbucketProject bitbucketRepos' bbr
+                        else return True
+                  )
 
               liftIO $ forM_ imported $ putStrLn . gitlabRepoPath . fst
             ListNotImpoted -> do
               gitlabRepos' <- sortOn gitlabRepoPath <$> runGitlabApi (GL.findRepos gitlabNamespace Nothing)
+              bitbucketRepos' <- runBitbucketApi (BB.listProjectRepos bitbucketProject)
               notImported <-
-                sortOn bitbucketRepoSlug
-                . filter (not . filterBBSameName gitlabRepos')
-
-                . filter (filterBitbucketReposByCommandLineOption True (listConfigRepoNames o))
-                . filter (not . filterBitbucketReposByCommandLineOption False (listConfigNoRepoNames o))
-                <$> runBitbucketApi (BB.listProjectRepos bitbucketProject)
+                filterM
+                  (\bbr ->
+                      if listConfigBitbucketOnlySubtreeDocpart cfg
+                        then isBitbucketOnlySubtreeDocpart bitbucketProject bitbucketRepos' bbr
+                        else return True
+                  )
+                  (sortOn bitbucketRepoSlug
+                  . filter (\bbr -> not (listConfigBitbucketSkipDocpart cfg && isDocPartRepo bitbucketRepos' bbr))
+                  . filter (\bbr -> not (listConfigBitbucketOnlyDocpart cfg) || isDocPartRepo bitbucketRepos' bbr)
+                  . filter (filterBitbucketReposByCommandLineOption True (listConfigRepoNames cfg))
+                  . filter (not . filterBitbucketReposByCommandLineOption False (listConfigNoRepoNames cfg))
+                  . filter (not . filterBBSameName gitlabRepos')
+                  $ bitbucketRepos')
+                >>=
+                filterM
+                  (\bbr ->
+                      if listConfigBitbucketSkipSubtreeDocpart cfg
+                        then isBitbucketSkipSubtreeDocpart bitbucketProject bitbucketRepos' bbr
+                        else return True
+                  )
               liftIO $ forM_ notImported $ putStrLn . bitbucketRepoSlug
+
+
+isBitbucketOnlySubtreeDocpart :: BitbucketProject -> [BitbucketRepo] -> BitbucketRepo -> CommonApi Bool
+isBitbucketOnlySubtreeDocpart bitbucketProject bitbucketRepos' repo = do
+  case findMainRepoForDocPartRepo bitbucketRepos' repo of
+    Nothing -> return False
+    Just mainRepo -> do
+      maybeCommit <- runBitbucketApi $ BB.findFirstCommit bitbucketProject repo
+      case maybeCommit of
+        Nothing -> return False
+        Just commit -> isJust <$> runBitbucketApi (BB.findCommit bitbucketProject mainRepo (bitbucketCommitId commit))
+
+isBitbucketSkipSubtreeDocpart :: BitbucketProject -> [BitbucketRepo] -> BitbucketRepo -> CommonApi Bool
+isBitbucketSkipSubtreeDocpart bitbucketProject bitbucketRepos' repo = do
+  case findMainRepoForDocPartRepo bitbucketRepos' repo of
+    Nothing -> return True
+    Just mainRepo -> do
+      maybeCommit <- runBitbucketApi $ BB.findFirstCommit bitbucketProject repo
+      case maybeCommit of
+        Nothing -> return True
+        Just commit -> isNothing <$> runBitbucketApi (BB.findCommit bitbucketProject mainRepo (bitbucketCommitId commit))

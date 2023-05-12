@@ -20,6 +20,7 @@ module GitLab
   , GitlabCommit(..)
   , wasCommitsAfterCreation
   , anyLastCommit
+  , allLastCommits
   , setRepoPath
   ) where
 
@@ -43,7 +44,7 @@ import Data.Char (toLower)
 import Data.Text (Text, pack)
 import Data.Time (UTCTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
-import Control.Monad.Extra (anyM)
+import Control.Monad.Extra (anyM, allM)
 
 apiPath :: URI
 apiPath = fromJust $ parseRelativeReference "api/v4/"
@@ -440,6 +441,14 @@ listLastCommits repo limit = do
 
 anyLastCommit :: GitlabRepo -> Int -> (GitlabCommit -> IO Bool) -> GitlabApi Bool
 anyLastCommit repo limit predicat = do
+  checkLastCommits repo limit (anyM predicat) True False
+
+allLastCommits :: GitlabRepo -> Int -> (GitlabCommit -> IO Bool) -> GitlabApi Bool
+allLastCommits repo limit predicat =
+  checkLastCommits repo limit ((not <$>) . allM predicat) False True
+
+checkLastCommits :: GitlabRepo -> Int -> ([GitlabCommit] -> IO Bool) -> Bool -> Bool -> GitlabApi Bool
+checkLastCommits repo limit predicat failResult listEndedResult = do
   cfg <- ask
   urlBase_ <- gitlabRestApiUrlBase
   let perPage = 20 :: Int
@@ -448,14 +457,14 @@ anyLastCommit repo limit predicat = do
                          then limit - ((page -1) * perPage)
                          else perPage
         if perPage' == 0
-          then return False
+          then return listEndedResult
           else do
             rs <- reverse <$> ((^. responseBody) <$> (asJSON =<< query_ perPage'))
-            found <- liftIO $ anyM predicat rs
-            if found
-              then return True
+            failed <- liftIO $ predicat rs
+            if failed
+              then return failResult
               else if length rs < perPage'
-                     then return False
+                     then return listEndedResult
                      else doIt (succ page)
         where
           query_ perPage' = do
@@ -472,6 +481,7 @@ anyLastCommit repo limit predicat = do
                  , "commits"
                  ] `relativeTo` urlBase_)
   liftIO $ doIt 1
+
 
 setRepoPath :: GitlabRepo -> String -> GitlabApi ()
 setRepoPath repo newPath = do
