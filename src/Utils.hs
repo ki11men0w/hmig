@@ -3,11 +3,14 @@ module Utils
        , toPath
        , error'
        , showProgess
+       , putStr'
+       , putStrLn'
        ) where
 
 import Network.URI (URI, parseRelativeReference, parseURI)
 import Network.URI.Encode (encode)
 import Data.List (intercalate)
+import System.Console.Haskeline ( runInputT, defaultSettings, outputStrLn, outputStr )
 
 error' :: String -> a
 error' = errorWithoutStackTrace
@@ -28,3 +31,9 @@ toUri uri =
 
 showProgess :: Int -> Int -> String
 showProgess no count = "(" <> show no <> "/" <> show count <> ")"
+
+putStrLn' :: String -> IO ()
+putStrLn' = runInputT defaultSettings . outputStrLn
+
+putStr' :: String -> IO ()
+putStr' = runInputT defaultSettings . outputStr

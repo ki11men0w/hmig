@@ -22,7 +22,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Prompt (PromptVariant(..), PromptVariantConfig(..), promptChar', promptYorN)
 import Data.Maybe (catMaybes, mapMaybe, fromMaybe, isNothing, isJust)
-import Utils (showProgess)
+import Utils (showProgess, putStr', putStrLn')
 import Data.Char (toLower, isUpper)
 import Data.Map (fromListWith, toList)
 import Data.List (stripPrefix, sortOn, isSuffixOf)
@@ -31,7 +31,6 @@ import Data.Foldable (find)
 import Control.Concurrent (threadDelay)
 import Control.Exception (Exception, throwIO)
 import Data.Typeable (Typeable)
-import System.IO (hFlush, stdout)
 
 type CommonApi a = ReaderT BitbucketApiConfig (ReaderT GitlabApiConfig IO) a
 
@@ -115,7 +114,7 @@ withNamespaces actionLabel bitbucketProjectName_ gitlabNamespaceName_ action = d
        case maybeBitbucketProject of
          Nothing -> liftIO . throwIO . OtherError $ "BitBucket poject `" <> bitbucketProjectName_ <> "` not found"
          Just bitbucketProject -> do
-           forM_ actionLabel (liftIO . putStrLn)
+           forM_ actionLabel (liftIO . putStrLn')
            action bitbucketProject gitlabNamespace
 
 docPartSuffix :: String
@@ -217,7 +216,7 @@ import' cfg = do
                       , ibbpGitlabRepo = Nothing
                       }
                 runGitlabApi $ GL.importBitbucketProject importParams
-                liftIO $ putStrLn $ "Import of repository `" <> bitbucketProjectName bitbucketProject <> "/" <> bitbucketRepoName repo <> "` was started"
+                liftIO $ putStrLn' $ "Import of repository `" <> bitbucketProjectName bitbucketProject <> "/" <> bitbucketRepoName repo <> "` was started"
 
               waitForImportComplete bitbucketProject gitlabNamespace reposToImport
 
@@ -263,7 +262,7 @@ waitForImportComplete bitbucketProject gitlabNamespace bitbucketProjects = do
         <$> runGitlabApi (GL.findRepos gitlabNamespace Nothing)
       case importedGitlabRepos of
         [] -> do
-          when firstCall $ liftIO $ putStrLn $ "Waiting for the completion of importing repositories " <> showProgess (length bbProjects) (length bitbucketProjects) <> "..."
+          when firstCall $ liftIO $ putStrLn' $ "Waiting for the completion of importing repositories " <> showProgess (length bbProjects) (length bitbucketProjects) <> "..."
           liftIO $ threadDelay 5000000
           wait bbProjects False
         _ -> do
@@ -273,10 +272,10 @@ waitForImportComplete bitbucketProject gitlabNamespace bitbucketProjects = do
       where
         postImportAction glRepo = do
           let bbRepo = head $ filter (`isTheSameRepos` glRepo) bbProjects
-          liftIO $ putStrLn $ "Additional import procedures for `" <> gitlabRepoName glRepo <> "` repository..."
+          liftIO $ putStrLn' $ "Additional import procedures for `" <> gitlabRepoName glRepo <> "` repository..."
           importBranchPermissions bitbucketProject bbRepo glRepo
           correctRepoPath glRepo
-          liftIO $ putStrLn $ "Additional import procedures for `" <> gitlabRepoName glRepo <> "` repository. Done."
+          liftIO $ putStrLn' $ "Additional import procedures for `" <> gitlabRepoName glRepo <> "` repository. Done."
 
 
 importBranchPermissions :: BitbucketProject -> BitbucketRepo -> GitlabRepo -> CommonApi ()
@@ -357,7 +356,7 @@ importBranchPermissions bitbucketProject bitbucketRepo gitlabRepo = do
             any' permType = any (\p -> permType == bitbucketBranchPermissionType p) permissions
 
 allDoneReport :: IO ()
-allDoneReport = putStrLn "All done"
+allDoneReport = putStrLn' "All done"
 
 correctRepoPath :: GitlabRepo -> CommonApi ()
 correctRepoPath repo =
@@ -445,9 +444,9 @@ clean o = do
                   if cleanConfigAllowChanged o
                     then return gitlabRepos'
                     else do
-                         liftIO $ putStr "Check whether the GitLab repositories have been modified after import. It may take some time..." >> hFlush stdout
+                         liftIO $ putStr' "Check whether the GitLab repositories have been modified after import. It may take some time..."
                          rs <- filterM (\(glr,bbr) -> not <$> wasGitlabRepoChangedSinceImported glr bitbucketProject bbr) gitlabRepos'
-                         liftIO $ putStrLn " Done"
+                         liftIO $ putStrLn' " Done"
                          return rs
                 when (null gitlabRepos) $ liftIO . throwIO . NothingToDo $ "No GitLab repository was found that meets the selection criteria"
 
@@ -465,7 +464,7 @@ clean o = do
 
               forM_ reposToDelete $ \repo -> do
                 runGitlabApi $ GL.deleteRepo repo
-                liftIO $ putStrLn $ "Repository `" <> gitlabNamespaceName gitlabNamespace <> "/" <> gitlabRepoName repo <> "` was deleted"
+                liftIO $ putStrLn' $ "Repository `" <> gitlabNamespaceName gitlabNamespace <> "/" <> gitlabRepoName repo <> "` was deleted"
       where
         prompt (gitlabRepo, _) = do
           incrementNo
@@ -577,7 +576,7 @@ list' cfg = do
                         else return True
                   )
 
-              liftIO $ forM_ imported $ putStrLn . gitlabRepoPath . fst
+              liftIO $ forM_ imported $ putStrLn' . gitlabRepoPath . fst
             ListNotImpoted -> do
               gitlabRepos' <- sortOn gitlabRepoPath <$> runGitlabApi (GL.findRepos gitlabNamespace Nothing)
               bitbucketRepos' <- runBitbucketApi (BB.listProjectRepos bitbucketProject)
@@ -602,7 +601,7 @@ list' cfg = do
                         then isBitbucketSkipSubtreeDocpart bitbucketProject bitbucketRepos' bbr
                         else return True
                   )
-              liftIO $ forM_ notImported $ putStrLn . bitbucketRepoSlug
+              liftIO $ forM_ notImported $ putStrLn' . bitbucketRepoSlug
 
 
 isBitbucketOnlySubtreeDocpart :: BitbucketProject -> [BitbucketRepo] -> BitbucketRepo -> CommonApi Bool

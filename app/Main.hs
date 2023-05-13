@@ -1,7 +1,7 @@
 module Main (main) where
 
 import Lib as L
-import Utils (toUri)
+import Utils (toUri, putStr', putStrLn')
 
 import Data.Maybe (fromMaybe)
 import Data.Version (showVersion)
@@ -304,13 +304,13 @@ main = do
 
 catchErrorAndExit :: ApiException -> IO a
 catchErrorAndExit (NothingToDo s) = do
-  putStrLn s
+  putStrLn' s
   exitSuccess
 catchErrorAndExit (ActionCanceledByUser s) = do
-  putStrLn s
+  putStrLn' s
   exitWith $ ExitFailure 2
 catchErrorAndExit (OtherError s) = do
-  putStrLn s
+  putStrLn' s
   exitWith $ ExitFailure 1
 
 
