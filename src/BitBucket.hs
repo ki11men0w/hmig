@@ -82,16 +82,27 @@ instance FromJSON BitbucketErrors where
   parseJSON (Object v) = BitbucketErrors <$> v .: "errors"
   parseJSON _ = empty
 
-notFound :: ([BitbucketError] -> Bool) -> (HC.HttpException -> IO (Maybe a))
-notFound predicat =
+catchApiError :: Int -> ([BitbucketError] -> Bool) -> (HC.HttpException -> IO (Maybe a))
+catchApiError statusCode' predicat =
+  (convert' <$>) . catchApiErrorEither statusCode' predicat
+  where
+    convert' (Left _) = Nothing
+    convert' (Right a) = Just a
+
+catchApiErrorEither :: Int -> ([BitbucketError] -> Bool) -> (HC.HttpException -> IO (Either String a))
+catchApiErrorEither statusCode' predicat =
   handler
   where
     handler e@(HC.HttpExceptionRequest _ (HC.StatusCodeException response msg))
-      | response ^. responseStatus . statusCode == 404 =
+      | response ^. responseStatus . statusCode == statusCode' =
           case decode . Char8.pack . BU.toString $ msg of
             Just errors ->
               if predicat (bitbucketErrors errors)
-              then return Nothing
+              then return . Left
+                   $ case bitbucketErrors errors of
+                       [] -> "Not authorized"
+                       BitbucketError m _:_ -> m
+                       
               else throwIO e
             Nothing -> throwIO e
       | otherwise = throwIO e
@@ -99,8 +110,11 @@ notFound predicat =
 
 notFoundAndExceptionNameMatch :: (String -> Bool) -> (HC.HttpException -> IO (Maybe a))
 notFoundAndExceptionNameMatch predicat =
-  notFound $ any $ predicat . bitbucketErrorExceptionName
+  catchApiError 404 $ any $ predicat . bitbucketErrorExceptionName
 
+notAuthorizedAndExceptionNameMatch :: (String -> Bool) -> (HC.HttpException -> IO (Either String a))
+notAuthorizedAndExceptionNameMatch predicat =
+  catchApiErrorEither 401 $ any $ predicat . bitbucketErrorExceptionName
 
 data BitbucketProject = BitbucketProject
   { bitbucketProjectKey :: String
@@ -288,7 +302,7 @@ instance FromJSON BitbucketBranchPermittionsList where
     <*> v .:  "values"
   parseJSON _ = empty
 
-listBranchPermisions :: BitbucketProject -> BitbucketRepo -> BitbucketApi [BitbucketBranchPermission]
+listBranchPermisions :: BitbucketProject -> BitbucketRepo -> BitbucketApi (Either String [BitbucketBranchPermission])
 listBranchPermisions project repo = do
   cfg <- ask
   urlBase_ <- bitbucketRestBranchPermissionsUrlBase
@@ -310,7 +324,7 @@ listBranchPermisions project repo = do
              , "restrictions"
              ] `relativeTo` urlBase_)
 
-  liftIO $ doIt [] 0
+  liftIO ((Right <$> doIt [] 0) `E.catch` notAuthorizedAndExceptionNameMatch (".AuthorisationException" `isSuffixOf`))
 
 newtype BitbucketCommit = BitbucketCommit
   { bitbucketCommitId :: String

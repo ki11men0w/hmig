@@ -280,21 +280,23 @@ waitForImportComplete bitbucketProject gitlabNamespace bitbucketProjects = do
 
 importBranchPermissions :: BitbucketProject -> BitbucketRepo -> GitlabRepo -> CommonApi ()
 importBranchPermissions bitbucketProject bitbucketRepo gitlabRepo = do
-  deleteAutoCreatedBranches =<< runGitlabApi (GL.listProtectedBanches gitlabRepo)
-
-  gitlabBranches <- runGitlabApi $ GL.listProtectedBanches gitlabRepo
-  bitbucketBranchesParts <-
-    filter isMigratableBranchPermission
-    <$> runBitbucketApi (BB.listBranchPermisions bitbucketProject bitbucketRepo)
-
-  let
-    onlyAbsent =
+  maybeBitbucketBranchPermissions <- runBitbucketApi (BB.listBranchPermisions bitbucketProject bitbucketRepo)
+  case maybeBitbucketBranchPermissions of
+    Right branchPermissions -> do
+      deleteAutoCreatedBranches =<< runGitlabApi (GL.listProtectedBanches gitlabRepo)
+      gitlabBranches <- runGitlabApi $ GL.listProtectedBanches gitlabRepo
       let
-        bitbucketBranches :: [(String, [BitbucketBranchPermission])]
-        bitbucketBranches = (toList . fromListWith (<>)) $ (\p -> (branchName' p, [p])) <$> bitbucketBranchesParts
-      in (\bb -> not (any (\gl -> gitlabProtectedBranchName gl == fst bb) gitlabBranches)) `filter` bitbucketBranches
-
-  mapM_ migrateBranch onlyAbsent
+        bitbucketBranchesParts = filter isMigratableBranchPermission branchPermissions
+        onlyAbsent =
+          let
+            bitbucketBranches :: [(String, [BitbucketBranchPermission])]
+            bitbucketBranches = (toList . fromListWith (<>)) $ (\p -> (branchName' p, [p])) <$> bitbucketBranchesParts
+          in (\bb -> not (any (\gl -> gitlabProtectedBranchName gl == fst bb) gitlabBranches)) `filter` bitbucketBranches
+      
+      mapM_ migrateBranch onlyAbsent
+    Left msg -> do
+      liftIO $ putStrLn' $ "Cannot get branch permissions for BitBucket repository `" <> bitbucketRepoName bitbucketRepo <> "`: " <> msg
+      liftIO $ putStrLn' $ "Import of BRANCH PERMISSIONS was skipped for GitLab repository `" <> gitlabRepoName gitlabRepo <> "`"
   where
     branchPrefix = "refs/heads/"
     branchName' bp =
