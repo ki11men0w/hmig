@@ -41,7 +41,7 @@ The utility has a built-in help. You can always specify the command line key ‘
 
 ```bash
 $ hmig --help
-Migration utility from BitBucket to GitLab. Version 0.1.0.0
+Migration utility from BitBucket to GitLab. Version 0.2.0.0
 
 Usage: hmig COMMAND [--version]
 
@@ -63,6 +63,10 @@ Available commands:
                                     that have corresponding repositories in the specified BitBucket project. This will allow you to
                                     re-import these repositories from BitBucket to GitLab.
   list                              Prints a list of imported (or ready-to-import) repositories.
+  post-processing                   Post processing of imported repositories. This command will be useful if you have already
+                                    imported some repositories from BitBucket to GitLab with another utility. Or if during the
+                                    initial import using this utility there were not enough permissions to read the corresponding
+                                    settings in the BitBucket repository and the import of these settings was skipped.
 ```
 
 To get help for a specific command:

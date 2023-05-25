@@ -9,6 +9,8 @@ module Lib
     , list'
     , ListConfig(..)
     , ListMode(..)
+    , postProcessing'
+    , PostProcessingConfig(..)
     ) where
 
 import GitLab as GL
@@ -17,16 +19,17 @@ import Network.URI
 import Control.Monad.Reader
 import Control.Monad.State
 import Prompt (PromptVariant(..), PromptVariantConfig(..), promptChar', promptYorN)
-import Data.Maybe (catMaybes, mapMaybe, fromMaybe, isNothing, isJust)
-import Utils (showProgess, putStr', putStrLn')
+import Data.Maybe (catMaybes, mapMaybe, fromMaybe, isNothing, isJust, fromJust)
+import Utils (showProgess, putStr', putStrLn', ensureEndDot, error')
 import Data.Char (toLower, isUpper)
 import Data.Map (fromListWith, toList)
 import Data.List (stripPrefix, sortOn, isSuffixOf)
-import Data.List.Extra (stripSuffix)
+import Data.List.Extra (stripSuffix, trim)
 import Data.Foldable (find)
 import Control.Concurrent (threadDelay)
 import Control.Exception (Exception, throwIO)
 import Data.Typeable (Typeable)
+import Data.Bifunctor (second)
 
 type CommonApi a = ReaderT BitbucketApiConfig (ReaderT GitlabApiConfig IO) a
 
@@ -268,18 +271,19 @@ waitForImportComplete bitbucketProject gitlabNamespace bitbucketProjects = do
       where
         postImportAction glRepo = do
           let bbRepo = head $ filter (`isTheSameRepos` glRepo) bbProjects
-          liftIO $ putStrLn' $ "Additional import procedures for `" <> gitlabRepoName glRepo <> "` repository..."
+          liftIO $ putStrLn' $ "Additional import actions for `" <> gitlabRepoName glRepo <> "` repository..."
           importBranchPermissions bitbucketProject bbRepo glRepo
           correctRepoPath glRepo
-          liftIO $ putStrLn' $ "Additional import procedures for `" <> gitlabRepoName glRepo <> "` repository. Done."
+          liftIO $ putStrLn' $ "Additional import actions for `" <> gitlabRepoName glRepo <> "` repository. Done."
 
 
 importBranchPermissions :: BitbucketProject -> BitbucketRepo -> GitlabRepo -> CommonApi ()
 importBranchPermissions bitbucketProject bitbucketRepo gitlabRepo = do
   maybeBitbucketBranchPermissions <- runBitbucketApi (BB.listBranchPermisions bitbucketProject bitbucketRepo)
+  liftIO $ putStr' $ "Import branch permissions for `" <> gitlabRepoName gitlabRepo <> "`..."
   case maybeBitbucketBranchPermissions of
     Right branchPermissions -> do
-      deleteAutoCreatedBranches =<< runGitlabApi (GL.listProtectedBanches gitlabRepo)
+      delCnt <- deleteAutoCreatedBranches =<< runGitlabApi (GL.listProtectedBanches gitlabRepo)
       gitlabBranches <- runGitlabApi $ GL.listProtectedBanches gitlabRepo
       let
         bitbucketBranchesParts = filter isMigratableBranchPermission branchPermissions
@@ -289,10 +293,17 @@ importBranchPermissions bitbucketProject bitbucketRepo gitlabRepo = do
             bitbucketBranches = (toList . fromListWith (<>)) $ (\p -> (branchName' p, [p])) <$> bitbucketBranchesParts
           in (\bb -> not (any (\gl -> gitlabProtectedBranchName gl == fst bb) gitlabBranches)) `filter` bitbucketBranches
       
-      mapM_ migrateBranch onlyAbsent
+      cnt <- length <$> mapM migrateBranch onlyAbsent
+      liftIO $ putStrLn' $
+        case (cnt, delCnt) of
+          (0, 0) -> " Nothing to do."
+          _ -> " Done:"
+               <> if cnt > 0 then " " <> show cnt <> " branch permission(s) was created." else ""
+               <> if delCnt > 0 then " " <> show delCnt <> " auto created branch permission(s) was deleted." else ""
     Left msg -> do
-      liftIO $ putStrLn' $ "Cannot get branch permissions for BitBucket repository `" <> bitbucketRepoName bitbucketRepo <> "`: " <> msg
-      liftIO $ putStrLn' $ "Import of BRANCH PERMISSIONS was skipped for GitLab repository `" <> gitlabRepoName gitlabRepo <> "`"
+      let msg' = trim msg
+      liftIO $ putStrLn' $ " Skipped: Cannot get branch permissions for BitBucket repository `" <> bitbucketRepoName bitbucketRepo <> "`: "
+                           <> ensureEndDot msg'
   where
     branchPrefix = "refs/heads/"
     branchName' bp =
@@ -324,7 +335,7 @@ importBranchPermissions bitbucketProject bitbucketRepo gitlabRepo = do
                       _)) = True
         isIgnored _ = False
 
-    deleteAutoCreatedBranches :: [GitlabProtectedBranch] -> CommonApi ()
+    deleteAutoCreatedBranches :: [GitlabProtectedBranch] -> CommonApi Int
     deleteAutoCreatedBranches gitlabBranches = do
       let autoCreatedProtectedBranch =
             GitlabProtectedBranch
@@ -332,7 +343,7 @@ importBranchPermissions bitbucketProject bitbucketRepo gitlabRepo = do
               [GitlabProtectedBranchAccessLevelMaintainers]
               [GitlabProtectedBranchAccessLevelMaintainers]
               False
-      forM_
+      length <$> forM
         (filter (== autoCreatedProtectedBranch) gitlabBranches)
         (runGitlabApi . GL.deleteProtectedBranch gitlabRepo . gitlabProtectedBranchName)
 
@@ -360,9 +371,13 @@ correctRepoPath :: GitlabRepo -> CommonApi ()
 correctRepoPath repo =
   let
     path' = gitlabRepoPath repo
+    newPath = toLower <$> path'
   in
     when (any isUpper path')
-    $ runGitlabApi (GL.setRepoPath repo (toLower <$> path'))
+    $ do
+        liftIO $ putStr' $ "Normalize `" <> gitlabRepoName repo <> "` repository path: `" <> path' <> "`->`" <> newPath <> "`..."
+        runGitlabApi (GL.setRepoPath repo newPath)
+        liftIO $ putStrLn' " Done."
 
 findTheSameByName :: [BitbucketRepo] -> GitlabRepo -> Maybe BitbucketRepo
 findTheSameByName bitbucketRepos gitlabRepo =
@@ -444,7 +459,7 @@ clean o = do
                     else do
                          liftIO $ putStr' "Check whether the GitLab repositories have been modified after import. It may take some time..."
                          rs <- filterM (\(glr,bbr) -> not <$> wasGitlabRepoChangedSinceImported glr bitbucketProject bbr) gitlabRepos'
-                         liftIO $ putStrLn' " Done"
+                         liftIO $ putStrLn' " Done."
                          return rs
                 when (null gitlabRepos) $ liftIO . throwIO . NothingToDo $ "No GitLab repository was found that meets the selection criteria"
 
@@ -621,3 +636,68 @@ isBitbucketSkipSubtreeDocpart bitbucketProject bitbucketRepos' repo = do
       case maybeCommit of
         Nothing -> return True
         Just commit -> isNothing <$> runBitbucketApi (BB.findCommit bitbucketProject mainRepo (bitbucketCommitId commit))
+
+
+data PostProcessingConfig = PostProcessingConfig
+  { postProcessingConfigBitbucketAccessToken :: String
+  , postProcessingConfigBitbucketUrlBase :: URI
+  , postProcessingConfigGitlabAccessToken :: String
+  , postProcessingConfigGitlabUrlBase :: URI
+  , postProcessingConfigBitbucketProjectName :: String
+  , postProcessingConfigGitlabNamespaceName :: String
+  , postProcessingConfigRepoNames :: Maybe [String]
+  , postProcessingConfigNoRepoNames :: Maybe [String]
+  , postProcessingConfigAll :: Bool
+  , postProcessingConfigImportBranchPermissions :: Bool
+  , postProcessingConfigCorrectRepoPath :: Bool
+  } deriving Show
+
+postProcessing' :: PostProcessingConfig -> IO ()
+postProcessing' cfg = do
+  checkActions
+  bitbucketCfg <- newBitbucketApiConfig (postProcessingConfigBitbucketUrlBase cfg) (postProcessingConfigBitbucketAccessToken cfg)
+  gitlabCfg <- newGitlabApiConfig (postProcessingConfigGitlabUrlBase cfg) (postProcessingConfigGitlabAccessToken cfg)
+  runReaderT (runReaderT doIt bitbucketCfg) gitlabCfg
+  allDoneReport
+  where
+    checkActions = do
+      unless ( postProcessingConfigAll cfg
+               || postProcessingConfigImportBranchPermissions cfg
+               || postProcessingConfigCorrectRepoPath cfg
+             )
+        $ liftIO $ error' "No action is specified for post-processing"
+
+    doIt :: CommonApi ()
+    doIt =
+      withNamespaces
+        (Just ("Applying extra settings to existing repositories of `" <> postProcessingConfigGitlabNamespaceName cfg <> "` GitLab namespace that were imported from `" <> postProcessingConfigBitbucketProjectName cfg <> "` BitBucket project"))
+        (postProcessingConfigBitbucketProjectName cfg)
+        (postProcessingConfigGitlabNamespaceName cfg)
+        $ \bitbucketProject gitlabNamespace -> do
+          gitlabRepos' <- sortOn gitlabRepoPath <$> runGitlabApi (GL.findRepos gitlabNamespace Nothing)
+          bitbucketRepos' <- runBitbucketApi (BB.listProjectRepos bitbucketProject)
+          let
+            bitbucketReposToProcess =
+                sortOn (bitbucketRepoSlug . fst)
+                . filter (filterBitbucketReposByCommandLineOption True (postProcessingConfigRepoNames cfg) . fst)
+                . filter (not . filterBitbucketReposByCommandLineOption False (postProcessingConfigNoRepoNames cfg) . fst)
+                . map (second fromJust)
+                . filter (isJust . snd)
+                . map (\bbRepo -> (bbRepo, find (isTheSameRepos bbRepo) gitlabRepos'))
+                $ bitbucketRepos'
+
+            processOneRepo (bbRepo, glRepo) = do
+              let allActions = postProcessingConfigAll cfg
+
+              liftIO $ putStrLn' $ "Processing `" <> gitlabRepoName glRepo <> "` repository..."
+
+              when (allActions || postProcessingConfigImportBranchPermissions cfg)
+                $ importBranchPermissions bitbucketProject bbRepo glRepo
+
+              when (allActions || postProcessingConfigCorrectRepoPath cfg)
+                $ correctRepoPath glRepo
+
+              liftIO $ putStrLn' $ "Processing `" <> gitlabRepoName glRepo <> "` repository. Done."
+
+          mapM_ processOneRepo bitbucketReposToProcess
+

@@ -43,6 +43,7 @@ data Command
   = Import ImportOptions
   | Clean CleanOptions
   | List ListOptions
+  | PostProcessing PostProcessingOptions
 
 programVersion :: String
 programVersion =
@@ -156,6 +157,16 @@ options bitbucketAccessToken gitlabAccessToken = Options
                           (listParser bitbucketAccessToken gitlabAccessToken)
                           (fullDesc
                            <> progDesc "Prints a list of imported (or ready-to-import) repositories."))
+        <>
+        command "post-processing" (info
+                          (postProcessingParser bitbucketAccessToken gitlabAccessToken)
+                          (fullDesc
+                           <> progDesc "Post processing of imported repositories. \
+                                       \ This command will be useful if you have already imported some \
+                                       \ repositories from BitBucket to GitLab with another utility. \
+                                       \ Or if during the initial import using this utility there were not enough permissions \
+                                       \ to read the corresponding settings in the BitBucket repository and the import \
+                                       \ of these settings was skipped."))
        )
 
 data ImportOptions = ImportOptions
@@ -272,6 +283,32 @@ listParser bitbucketAccessToken gitlabAccessToken =
         <*> skipDocPartSubtreeParser
         <*> onlyDocPartSubtreeParser
 
+data PostProcessingOptions = PostProcessingOptions
+  { postProcessingOptionsCommon :: CommonOptions
+  , postProcessingOptionsAll :: Bool
+  , postProcessingOptionsImportBranchPermissions :: Bool
+  , postProcessingOptionsCorrecRepoPath :: Bool
+  }
+postProcessingParser :: Maybe String -> Maybe String -> Parser Command
+postProcessingParser bitbucketAccessToken gitlabAccessToken =
+  PostProcessing <$> postProcessingOptionsParser
+  where
+    postProcessingOptionsParser :: Parser PostProcessingOptions
+    postProcessingOptionsParser =
+      PostProcessingOptions
+      <$> commonOptions bitbucketAccessToken gitlabAccessToken
+      <*> switch
+          ( long "all"
+         <> help "Do all applicable post-processing actions"
+          )
+      <*> switch
+          ( long "branch-permissions"
+         <> help "Import branch permissions that are not in GitLab repository and present in the corresponding BitBucket repository"
+          )
+      <*> switch
+          ( long "correct-repo-path"
+         <> help "Normalization of repositories paths so that the repository URL does not contain uppercase characters."
+          )
 
 uriReader :: ReadM URI
 uriReader = maybeReader parseAbsoluteURI
@@ -392,4 +429,26 @@ migrate' (List opt) = do
         , listConfigBitbucketOnlySubtreeDocpart = listOptionsOnlySubtreeDocpart opt
         }
   list' cfg
+    `catch` catchErrorAndExit
+
+migrate' (PostProcessing opt) = do
+  let common = postProcessingOptionsCommon opt
+  repos <- makeRepoNames (optRepoNames common) (optRepoNamesFile common)
+  noRepos <- makeRepoNames (optNoRepoNames common) (optNoRepoNamesFile common)
+  let
+    cfg =
+        PostProcessingConfig
+        { postProcessingConfigBitbucketAccessToken = optBitbucketAccessToken common
+        , postProcessingConfigBitbucketUrlBase = optBitbucketUrl common
+        , postProcessingConfigGitlabAccessToken = optGitlabAccessToken common
+        , postProcessingConfigGitlabUrlBase = optGitlabUrl common
+        , postProcessingConfigBitbucketProjectName = optBitbucketProjectName common
+        , postProcessingConfigGitlabNamespaceName = optGitlabNamespace common
+        , postProcessingConfigRepoNames = repos
+        , postProcessingConfigNoRepoNames = noRepos
+        , postProcessingConfigAll = postProcessingOptionsAll opt
+        , postProcessingConfigImportBranchPermissions = postProcessingOptionsImportBranchPermissions opt
+        , postProcessingConfigCorrectRepoPath = postProcessingOptionsCorrecRepoPath opt
+        }
+  postProcessing' cfg
     `catch` catchErrorAndExit

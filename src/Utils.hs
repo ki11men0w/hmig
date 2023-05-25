@@ -5,11 +5,12 @@ module Utils
        , showProgess
        , putStr'
        , putStrLn'
+       , ensureEndDot
        ) where
 
 import Network.URI (URI, parseRelativeReference, parseURI)
 import Network.URI.Encode (encode)
-import Data.List (intercalate)
+import Data.List (intercalate, isSuffixOf)
 import System.Console.Haskeline ( runInputT, defaultSettings, outputStrLn, outputStr )
 
 error' :: String -> a
@@ -37,3 +38,6 @@ putStrLn' = runInputT defaultSettings . outputStrLn
 
 putStr' :: String -> IO ()
 putStr' = runInputT defaultSettings . outputStr
+
+ensureEndDot :: String -> String
+ensureEndDot s = if "." `isSuffixOf` s then "" else "."
