@@ -298,7 +298,7 @@ postProcessingParser bitbucketAccessToken gitlabAccessToken =
       PostProcessingOptions
       <$> commonOptions bitbucketAccessToken gitlabAccessToken
       <*> switch
-          ( long "all"
+          ( long "all-actions"
          <> help "Do all applicable post-processing actions"
           )
       <*> switch
