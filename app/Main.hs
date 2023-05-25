@@ -1,7 +1,7 @@
 module Main (main) where
 
 import Lib as L
-import Utils (toUri, putStr', putStrLn')
+import Utils (toUri, putStrLn')
 
 import Data.Maybe (fromMaybe)
 import Data.Version (showVersion)

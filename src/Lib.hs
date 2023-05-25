@@ -1,15 +1,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Lib
-    ( import'
+    ( ApiException(..)
+    , import'
     , ImportConfig(..)
     , BitbucketUserName
     , clean
     , CleanConfig(..)
-    , runGitlabApi
-    , runBitbucketApi
-    , importBranchPermissions
-    , ApiException(..)
-    , wasGitlabRepoChangedSinceImported
     , list'
     , ListConfig(..)
     , ListMode(..)
