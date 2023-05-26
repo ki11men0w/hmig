@@ -280,7 +280,7 @@ instance FromJSON GitlabProtectedBranchAccessLevel where
   parseJSON (Number 30) = pure GitlabProtectedBranchAccessLevelDevelopersAndMaintainers
   parseJSON (Number 40) = pure GitlabProtectedBranchAccessLevelMaintainers
   parseJSON (Number 60) = pure GitlabProtectedBranchAccessLevelAdmin
-  parseJSON x           = error $ "Unknown branch acsess level: " <> show x
+  parseJSON x           = error $ "Unknown branch access level: " <> show x
 instance ToJSON GitlabProtectedBranchAccessLevel where
   toJSON GitlabProtectedBranchAccessLevelNoOne                    = Number 0
   toJSON GitlabProtectedBranchAccessLevelDevelopersAndMaintainers = Number 30

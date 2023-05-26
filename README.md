@@ -6,7 +6,7 @@ An interactive command line utility designed to help migrate `git` repositories 
 ## Quick start
 
 ```bash
-$ export BITBUCKET_ACCESS_TOKEN="$(< file_with_bitbuckt_access_token)"
+$ export BITBUCKET_ACCESS_TOKEN="$(< file_with_bitbucket_access_token)"
 $ export GITLAB_ACCESS_TOKEN="$(< file_with_gitlab_access_token)"
 
 $ hmig import --bitbucket-project=rss --gitlab-namespace=rss --bitbucket-user=john.connor
@@ -31,13 +31,13 @@ Then run the build from the root directory of the repository (the directory wher
 $ stack install
 ```
 
-After its successfull execution, the command-line utility `hmig` will appear in the directory `~/.local/bin`
+After its successful execution, the command-line utility `hmig` will appear in the directory `~/.local/bin`
 (in *Windows* it is `%APPDATA%\Roaming\local\bin`).
 
 
 ## Usage
 
-The utility has a built-in help. You can always specify the command line key ‘--help‘ to get it:
+The utility has a built-in help. You can always specify the command line key `--help` to get it:
 
 ```bash
 $ hmig --help
@@ -59,7 +59,7 @@ Available commands:
                                     repositories, and then the remaining ones. Alternatively, you can
                                     make sure that all repositories have already been imported if no
                                     repositories are offered for import. If you need to reimport an
-                                    existing repository in GitLub, then you first need to delete it.
+                                    existing repository in GitLab, then you first need to delete it.
                                     This can be done, for example, with the `clean` command of this
                                     utility.
   clean                             Allows you to interactively select to delete GitLab repositories
@@ -90,7 +90,7 @@ Usage: hmig import (-a|--bitbucket-access-token TOKEN) (-A|--gitlab-access-token
   namespace. Repositories already present in the selected GitLab namespace are ignored and are not
   offered for import. In this way, you can import only part of the repositories, and then the
   remaining ones. Alternatively, you can make sure that all repositories have already been imported if
-  no repositories are offered for import. If you need to reimport an existing repository in GitLub,
+  no repositories are offered for import. If you need to reimport an existing repository in GitLab,
   then you first need to delete it. This can be done, for example, with the `clean` command of this
   utility.
 
@@ -99,10 +99,10 @@ Available options:
                                     environment variable value)
   -A,--gitlab-access-token TOKEN    BitBucket access token (default: `GITLAB_ACCESS_TOKEN` environment
                                     variable value)
-  -u,--bitbucket-url URL            BitBuckey URL base (default: https://stash.billing.ru)
+  -u,--bitbucket-url URL            BitBucket URL base (default: https://stash.billing.ru)
   -U,--gitlab-url URL               GitLab URL base (default: https://gitlab.nexign.com)
   -p,--bitbucket-project PROJECT    BitBucket project name. Only repositories from this project will
-                                    be taken inot account
+                                    be taken into account
   -P,--gitlab-namespace NAMESPACE   GitLab namespace name. Only repositories from this namespace will
                                     be taken into account
   -r,--repo REPO                    Repository name. Use it if you want to restrict actions to a
@@ -113,9 +113,9 @@ Available options:
                                     several repositories
   -f,--file-repo FILE               File with repository names, one per line. This way you can
                                     restrict actions to specified repositories only. Use as addition
-                                    or replaicement for `--repo` option
+                                    or replacement for `--repo` option
   -F,--file-no-repo FILE            File with repository names to skip, one per line. This way you can
-                                    ignore some repositories. Use as addition or replaicement for
+                                    ignore some repositories. Use as addition or replacement for
                                     `--no-repo` option
   -p,--bitbucket-user USER          BitBucket user name. Must correspond to BitBucket access token
                                     (see option `--bitbucket-access-token`)
@@ -144,7 +144,7 @@ Utility has auto completion feature for all common shells. For example, in *bash
 $ source <(hmig --bash-completion-script `which hmig`)
 ```
 
-#### Auto comletion in *MS Windows*
+#### Auto completion in *MS Windows*
 
 In order to be able to use the auto completion in *MS Windows*, you can, for example, run the utility in the `git-bash` shell
 from the git distribution for *MS Windows*.
