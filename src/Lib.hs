@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections #-}
 module Lib
     ( ApiException(..)
     , import'
@@ -676,8 +677,9 @@ postProcessing' cfg = do
         $ \bitbucketProject gitlabNamespace -> do
           gitlabRepos' <- sortOn gitlabRepoPath <$> runGitlabApi (GL.findRepos gitlabNamespace Nothing)
           bitbucketRepos' <- runBitbucketApi (BB.listProjectRepos bitbucketProject)
-          let
-            bitbucketReposToProcess =
+          reposToProcess <-
+            let
+              reposToProcess' =
                 sortOn (bitbucketRepoSlug . fst)
                 . filter (filterBitbucketReposByCommandLineOption True (postProcessingConfigRepoNames cfg) . fst)
                 . filter (not . filterBitbucketReposByCommandLineOption False (postProcessingConfigNoRepoNames cfg) . fst)
@@ -685,8 +687,13 @@ postProcessing' cfg = do
                 . filter (isJust . snd)
                 . map (\bbRepo -> (bbRepo, find (isTheSameRepos bbRepo) gitlabRepos'))
                 $ bitbucketRepos'
-
-            processOneRepo (bbRepo, glRepo) = do
+            in
+              fmap catMaybes
+                $ flip evalStateT
+                    (ProcessingContext 0 (length reposToProcess') ProcessingStateCommon)
+                    $ (\(b,g) -> ((b,) <$>) <$> prompt g) `mapM` reposToProcess'
+          let
+             processOneRepo (bbRepo, glRepo) = do
               let allActions = postProcessingConfigAll cfg
 
               liftIO $ putStrLn' $ "Processing `" <> gitlabRepoName glRepo <> "` repository..."
@@ -699,5 +706,55 @@ postProcessing' cfg = do
 
               liftIO $ putStrLn' $ "Processing `" <> gitlabRepoName glRepo <> "` repository. Done."
 
-          mapM_ processOneRepo bitbucketReposToProcess
+          
+          mapM_ processOneRepo reposToProcess
+      where
+        prompt gitlabRepo = do
+          incrementNo
+          ProcessingContext n c s <- get
+          case s of
+            ProcessingStateAllRemaining -> return (Just gitlabRepo)
+            ProcessingStateSkipRemaining -> return Nothing
+            ProcessingStateCommon -> do
+              let promptConfig = PromptVariantConfig
+                    { promptVariantConfigPrompt = "Shall I process repo `" <> gitlabRepoName gitlabRepo <> "`? (" <> show n <> "/" <> show c <> ")"
+                    , promptVariantConfigItems =
+                        [ PostProcessPromptItemYes
+                        , PostProcessPromptItemNo
+                        , PostProcessPromptItemYesAllTheRest
+                        , PostProcessPromptItemNoAllTheRest
+                        , PostProcessPromptItemCancel
+                        ]
+                    , promptVariantConfigDefault = Just PostProcessPromptItemNo
+                    }
+              promptResult <- liftIO $ promptChar' promptConfig
+              case promptResult of
+                PostProcessPromptItemYes           -> return $ Just gitlabRepo
+                PostProcessPromptItemNo            -> return Nothing
+                PostProcessPromptItemYesAllTheRest -> putNewState ProcessingStateAllRemaining  >> return (Just gitlabRepo)
+                PostProcessPromptItemNoAllTheRest  -> putNewState ProcessingStateSkipRemaining >> return Nothing
+                PostProcessPromptItemCancel        -> liftIO . throwIO $ ActionCanceledByUser "Processing canceled by user"
+          where
+            incrementNo = modify $ \p -> p { processingContextItemNo = 1 + processingContextItemNo p }
+            putNewState s = modify $ \p -> p { processingContextState = s }
 
+data PostProcessPromptItem = PostProcessPromptItemYes -- ^ Обработать этот репозиторий
+                           | PostProcessPromptItemNo -- ^ Не обрабатывать этот репозиторий
+                           | PostProcessPromptItemNoAllTheRest -- ^ Обработать все оставшиеся в списке репозитории
+                           | PostProcessPromptItemYesAllTheRest -- ^ Не обрабатывать все оставшиеся в списке репозитории
+                           | PostProcessPromptItemCancel -- ^ Прекратить обработку
+                           deriving Eq
+instance PromptVariant PostProcessPromptItem where
+  promptVariantChar PostProcessPromptItemYes           = 'y'
+  promptVariantChar PostProcessPromptItemNo            = 'n'
+  promptVariantChar PostProcessPromptItemNoAllTheRest  = 's'
+  promptVariantChar PostProcessPromptItemYesAllTheRest = 'a'
+  promptVariantChar PostProcessPromptItemCancel        = 'q'
+
+  promptVariantHelp PostProcessPromptItemYes           = "process this repository"
+  promptVariantHelp PostProcessPromptItemNo            = "don't process this repository"
+  promptVariantHelp PostProcessPromptItemYesAllTheRest = "process all the remaining repositories"
+  promptVariantHelp PostProcessPromptItemNoAllTheRest  = "process selected repositories, skipping all the remaining repositories"
+  promptVariantHelp PostProcessPromptItemCancel        = "cancel processing"
+
+  promptVariantIsAdvanced _                        = False
