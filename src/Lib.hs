@@ -467,7 +467,7 @@ clean o = do
                 fmap catMaybes
                   $ flip evalStateT
                       (ProcessingContext 0 (length gitlabRepos) ProcessingStateCommon)
-                      $ prompt `mapM` gitlabRepos
+                      $ (prompt . fst) `mapM` gitlabRepos
 
               when (null reposToDelete) $ liftIO . throwIO . NothingToDo $ "Nothing selected"
               do
@@ -480,7 +480,7 @@ clean o = do
                 runGitlabApi $ GL.deleteRepo repo
                 liftIO $ putStrLn' $ "Repository `" <> gitlabNamespaceName gitlabNamespace <> "/" <> gitlabRepoName repo <> "` was deleted"
       where
-        prompt (gitlabRepo, _) = do
+        prompt gitlabRepo = do
           incrementNo
           ProcessingContext n c s <- get
           case s of
@@ -504,7 +504,7 @@ clean o = do
                 DeletePromptItemNo            -> return Nothing
                 DeletePromptItemYesAllTheRest -> putNewState ProcessingStateAllRemaining  >> return (Just gitlabRepo)
                 DeletePromptItemNoAllTheRest  -> putNewState ProcessingStateSkipRemaining >> return Nothing
-                DeletePromptItemCancel        -> liftIO . throwIO $ ActionCanceledByUser "Migration canceled by user"
+                DeletePromptItemCancel        -> liftIO . throwIO $ ActionCanceledByUser "Clearing canceled by user"
           where
             incrementNo = modify $ \p -> p { processingContextItemNo = 1 + processingContextItemNo p }
             putNewState s = modify $ \p -> p { processingContextState = s }
