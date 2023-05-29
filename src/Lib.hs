@@ -693,7 +693,7 @@ postProcessing' cfg = do
                     (ProcessingContext 0 (length reposToProcess') ProcessingStateCommon)
                     $ (\(b,g) -> ((b,) <$>) <$> prompt g) `mapM` reposToProcess'
           let
-             processOneRepo (bbRepo, glRepo) = do
+            processOneRepo (bbRepo, glRepo) = do
               let allActions = postProcessingConfigAll cfg
 
               liftIO $ putStrLn' $ "Post-processing `" <> gitlabRepoName glRepo <> "` repository..."
