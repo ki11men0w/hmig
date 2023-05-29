@@ -706,6 +706,12 @@ postProcessing' cfg = do
 
               liftIO $ putStrLn' $ "Processing `" <> gitlabRepoName glRepo <> "` repository. Done."
 
+          when (null reposToProcess) $ liftIO . throwIO . NothingToDo $ "Nothing selected"
+          do
+            t <- liftIO $ case reposToProcess of
+              [_] -> promptYorN "Shall I process one selected repository"
+              _ -> promptYorN $ "Shall I process " <> show (length reposToProcess) <> " selected repositories"
+            unless t $ liftIO . throwIO . ActionCanceledByUser $ "Pos processing canceled by user"
           
           mapM_ processOneRepo reposToProcess
       where
