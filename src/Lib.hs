@@ -696,7 +696,7 @@ postProcessing' cfg = do
              processOneRepo (bbRepo, glRepo) = do
               let allActions = postProcessingConfigAll cfg
 
-              liftIO $ putStrLn' $ "Processing `" <> gitlabRepoName glRepo <> "` repository..."
+              liftIO $ putStrLn' $ "Post-processing `" <> gitlabRepoName glRepo <> "` repository..."
 
               when (allActions || postProcessingConfigImportBranchPermissions cfg)
                 $ importBranchPermissions bitbucketProject bbRepo glRepo
@@ -704,14 +704,14 @@ postProcessing' cfg = do
               when (allActions || postProcessingConfigCorrectRepoPath cfg)
                 $ correctRepoPath glRepo
 
-              liftIO $ putStrLn' $ "Processing `" <> gitlabRepoName glRepo <> "` repository. Done."
+              liftIO $ putStrLn' $ "Post-processing `" <> gitlabRepoName glRepo <> "` repository. Done."
 
           when (null reposToProcess) $ liftIO . throwIO . NothingToDo $ "Nothing selected"
           do
             t <- liftIO $ case reposToProcess of
-              [_] -> promptYorN "Shall I process one selected repository"
-              _ -> promptYorN $ "Shall I process " <> show (length reposToProcess) <> " selected repositories"
-            unless t $ liftIO . throwIO . ActionCanceledByUser $ "Pos processing canceled by user"
+              [_] -> promptYorN "Shall I post-process one selected repository"
+              _ -> promptYorN $ "Shall I post-process " <> show (length reposToProcess) <> " selected repositories"
+            unless t $ liftIO . throwIO . ActionCanceledByUser $ "Post-processing canceled by user"
           
           mapM_ processOneRepo reposToProcess
       where
@@ -723,7 +723,7 @@ postProcessing' cfg = do
             ProcessingStateSkipRemaining -> return Nothing
             ProcessingStateCommon -> do
               let promptConfig = PromptVariantConfig
-                    { promptVariantConfigPrompt = "Shall I process repo `" <> gitlabRepoName gitlabRepo <> "`? (" <> show n <> "/" <> show c <> ")"
+                    { promptVariantConfigPrompt = "Shall I post-process repo `" <> gitlabRepoName gitlabRepo <> "`? (" <> show n <> "/" <> show c <> ")"
                     , promptVariantConfigItems =
                         [ PostProcessPromptItemYes
                         , PostProcessPromptItemNo
@@ -739,7 +739,7 @@ postProcessing' cfg = do
                 PostProcessPromptItemNo            -> return Nothing
                 PostProcessPromptItemYesAllTheRest -> putNewState ProcessingStateAllRemaining  >> return (Just gitlabRepo)
                 PostProcessPromptItemNoAllTheRest  -> putNewState ProcessingStateSkipRemaining >> return Nothing
-                PostProcessPromptItemCancel        -> liftIO . throwIO $ ActionCanceledByUser "Processing canceled by user"
+                PostProcessPromptItemCancel        -> liftIO . throwIO $ ActionCanceledByUser "Post-processing canceled by user"
           where
             incrementNo = modify $ \p -> p { processingContextItemNo = 1 + processingContextItemNo p }
             putNewState s = modify $ \p -> p { processingContextState = s }
@@ -757,10 +757,10 @@ instance PromptVariant PostProcessPromptItem where
   promptVariantChar PostProcessPromptItemYesAllTheRest = 'a'
   promptVariantChar PostProcessPromptItemCancel        = 'q'
 
-  promptVariantHelp PostProcessPromptItemYes           = "process this repository"
-  promptVariantHelp PostProcessPromptItemNo            = "don't process this repository"
-  promptVariantHelp PostProcessPromptItemYesAllTheRest = "process all the remaining repositories"
-  promptVariantHelp PostProcessPromptItemNoAllTheRest  = "process selected repositories, skipping all the remaining repositories"
-  promptVariantHelp PostProcessPromptItemCancel        = "cancel processing"
+  promptVariantHelp PostProcessPromptItemYes           = "post-process this repository"
+  promptVariantHelp PostProcessPromptItemNo            = "don't post-process this repository"
+  promptVariantHelp PostProcessPromptItemYesAllTheRest = "post-process all the remaining repositories"
+  promptVariantHelp PostProcessPromptItemNoAllTheRest  = "post-process selected repositories, skipping all the remaining repositories"
+  promptVariantHelp PostProcessPromptItemCancel        = "cancel post-processing"
 
   promptVariantIsAdvanced _                        = False
