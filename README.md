@@ -9,14 +9,14 @@ An interactive command line utility designed to help migrate `git` repositories 
 $ export BITBUCKET_ACCESS_TOKEN="$(< file_with_bitbucket_access_token)"
 $ export GITLAB_ACCESS_TOKEN="$(< file_with_gitlab_access_token)"
 
-$ hmig import --bitbucket-project=rss --gitlab-namespace=rss --bitbucket-user=john.connor
+$ hmig import --bitbucket-project=rss --gitlab-namespace=subsystems/rss --bitbucket-user=john.connor
 ...interactive selection of repositories...
 
-$ hmig list --bitbucket-project=rss --gitlab-namespace=rss --repo=rss_asn --repo=rss_ibs
+$ hmig list --bitbucket-project=rss --gitlab-namespace=subsystems/rss --repo=rss_asn --repo=rss_ibs
 RSS_ASN
 RSS_IBS
 
-$ hmig clean --bitbucket-project=rss --gitlab-namespace=rss
+$ hmig clean --bitbucket-project=rss --gitlab-namespace=subsystems/rss
 ...interactive selection of repositories...
 ```
 
