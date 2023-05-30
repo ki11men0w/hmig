@@ -40,4 +40,4 @@ putStr' :: String -> IO ()
 putStr' = runInputT defaultSettings . outputStr
 
 ensureEndDot :: String -> String
-ensureEndDot s = if "." `isSuffixOf` s then "" else "."
+ensureEndDot s = if "." `isSuffixOf` s then s else s <> "."
