@@ -120,10 +120,6 @@ withNamespaces actionLabel bitbucketProjectName_ gitlabNamespaceName_ action = d
 docPartSuffix :: String
 docPartSuffix = "_docpart"
 
-isDocPartRepoName :: BitbucketRepo -> Bool
-isDocPartRepoName repo =
-  docPartSuffix `isSuffixOf` ((toLower <$>) . bitbucketRepoSlug $ repo)
-
 isDocPartRepo :: [BitbucketRepo] -> BitbucketRepo -> Bool
 isDocPartRepo allBibucketRepos repo =
   isJust $ findMainRepoForDocPartRepo allBibucketRepos repo
@@ -520,9 +516,9 @@ wasGitlabRepoChangedSinceImported gitlabRepo@GitlabRepo{gitlabRepoImportStatus =
   liftIO . throwIO . OtherError $ "The import of repository `" <> gitlabRepoName gitlabRepo <> "` is not finished yet"
 wasGitlabRepoChangedSinceImported gitlabRepo bitbucketProject bitbucketRepo = do
   config <- ask
-  runGitlabApi $ anyLastCommit gitlabRepo 20 (isCommitPesentInBitbucket config)
+  runGitlabApi $ anyLastCommit gitlabRepo 20 (isCommitNotPresentInBitbucket config)
   where
-    isCommitPesentInBitbucket config c =
+    isCommitNotPresentInBitbucket config c =
       isNothing <$> runReaderT (BB.findCommit bitbucketProject bitbucketRepo (gitlabCommitId c)) config
 
 data ListMode = ListImported

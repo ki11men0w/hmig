@@ -20,7 +20,6 @@ module GitLab
   , GitlabCommit(..)
   , wasCommitsAfterCreation
   , anyLastCommit
-  , allLastCommits
   , setRepoPath
   ) where
 
@@ -44,7 +43,7 @@ import Data.Char (toLower)
 import Data.Text (Text, pack)
 import Data.Time (UTCTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
-import Control.Monad.Extra (anyM, allM)
+import Control.Monad.Extra (anyM)
 
 apiPath :: URI
 apiPath = fromJust $ parseRelativeReference "api/v4/"
@@ -443,12 +442,8 @@ anyLastCommit :: GitlabRepo -> Int -> (GitlabCommit -> IO Bool) -> GitlabApi Boo
 anyLastCommit repo limit predicat = do
   checkLastCommits repo limit (anyM predicat) True False
 
-allLastCommits :: GitlabRepo -> Int -> (GitlabCommit -> IO Bool) -> GitlabApi Bool
-allLastCommits repo limit predicat =
-  checkLastCommits repo limit ((not <$>) . allM predicat) False True
-
 checkLastCommits :: GitlabRepo -> Int -> ([GitlabCommit] -> IO Bool) -> Bool -> Bool -> GitlabApi Bool
-checkLastCommits repo limit predicat failResult listEndedResult = do
+checkLastCommits repo limit predicat successResult listEndedResult = do
   cfg <- ask
   urlBase_ <- gitlabRestApiUrlBase
   let perPage = 20 :: Int
@@ -460,9 +455,9 @@ checkLastCommits repo limit predicat failResult listEndedResult = do
           then return listEndedResult
           else do
             rs <- reverse <$> ((^. responseBody) <$> (asJSON =<< query_ perPage'))
-            failed <- liftIO $ predicat rs
-            if failed
-              then return failResult
+            succeed <- liftIO $ predicat rs
+            if succeed
+              then return successResult
               else if length rs < perPage'
                      then return listEndedResult
                      else doIt (succ page)
