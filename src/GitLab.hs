@@ -146,9 +146,7 @@ notFoundAndExceptionMessageMatch predicate =
 data GitlabNamespace = GitlabNamespace
   { gitlabNamespaceId :: Int
   , gitlabNamespaceName :: String
-  , gitlabNamespacePath :: String
   , gitlabNamespaceFullPath :: String
-  , gitlabNamespaceMembersCountWithDescendants :: Int
   }
   deriving (Show)
 instance FromJSON GitlabNamespace where
@@ -156,9 +154,7 @@ instance FromJSON GitlabNamespace where
     GitlabNamespace
     <$> v .: "id"
     <*> v .: "name"
-    <*> v .: "path"
     <*> v .: "full_path"
-    <*> v .: "members_count_with_descendants"
   parseJSON _ = empty
 
 findNamespace :: String -> GitlabApi (Maybe GitlabNamespace)
