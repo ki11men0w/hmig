@@ -70,7 +70,7 @@ commonOptions bitbucketAccessToken gitlabAccessToken =
         ( long "gitlab-access-token"
        <> short 'A'
        <> metavar "TOKEN"
-       <> help ("BitBucket access token (default: `" <> gitlabAccessTokenEnvName <> "` environment variable value)")
+       <> help ("GitLab access token (default: `" <> gitlabAccessTokenEnvName <> "` environment variable value)")
        <> maybe mempty value gitlabAccessToken
         )
     <*> option uriReader
