@@ -1,9 +1,9 @@
 name:                hmig
-version:             0.2.0.5
+version:             0.2.0.6
 license:             BSD3
 author:              "Maksim Golubev"
 maintainer:          "maksim.golubev@nexign.com"
-copyright:           "2023 Maksim Golubev"
+copyright:           "2024 Maksim Golubev"
 
 extra-source-files:
 - README.md
