@@ -77,7 +77,7 @@ commonOptions bitbucketAccessToken gitlabAccessToken =
         ( long "bitbucket-url"
        <> short 'u'
        <> metavar "URL"
-       <> help "BitBuckey URL base"
+       <> help "BitBucket URL base"
        <> showDefault
        <> value defaultBitbucketURLBase
         )
@@ -93,7 +93,7 @@ commonOptions bitbucketAccessToken gitlabAccessToken =
         ( long "bitbucket-project"
        <> short 'p'
        <> metavar "PROJECT"
-       <> help "BitBucket project name. Only repositories from this project will be taken inot account"
+       <> help "BitBucket project name. Only repositories from this project will be taken into account"
         )
     <*> option (eitherReader nonEmpty)
         ( long "gitlab-namespace"
@@ -120,14 +120,14 @@ commonOptions bitbucketAccessToken gitlabAccessToken =
         ( long "file-repo"
        <> short 'f'
        <> metavar "FILE"
-       <> help ("File with repository names, one per line. This way you can restrict actions to specified repositories only. Use as addition or replaicement for `--" <> repoLong <> "` option")
+       <> help ("File with repository names, one per line. This way you can restrict actions to specified repositories only. Use as addition or replacement for `--" <> repoLong <> "` option")
        <> value Nothing
         )
     <*> option (eitherReader ((Just <$>) . nonEmpty))
         ( long "file-no-repo"
        <> short 'F'
        <> metavar "FILE"
-       <> help ("File with repository names to skip, one per line. This way you can ignore some repositories.  Use as addition or replaicement for `--" <> noRepoLong <> "` option")
+       <> help ("File with repository names to skip, one per line. This way you can ignore some repositories.  Use as addition or replacement for `--" <> noRepoLong <> "` option")
        <> value Nothing
         )
 
@@ -142,7 +142,7 @@ options bitbucketAccessToken gitlabAccessToken = Options
                                          \ In this way, you can import only part of the repositories, and then the remaining ones.\
                                          \ Alternatively, you can make sure that all repositories have already been\
                                          \ imported if no repositories are offered for import.\
-                                         \ If you need to reimport an existing repository in GitLub, then you first need to delete it.\
+                                         \ If you need to reimport an existing repository in GitHub, then you first need to delete it.\
                                          \ This can be done, for example, with the `clean` command of this utility."))
         <>
         command "clean" (info
@@ -259,7 +259,7 @@ listParser bitbucketAccessToken gitlabAccessToken =
     listOptionsParser =
       let
         notLong = "not"
-        availableOnlyInImportedMode = "Incompaible with `--" <> notLong <> "` option"
+        availableOnlyInImportedMode = "Incompatible with `--" <> notLong <> "` option"
       in
         ListOptions
         <$> commonOptions bitbucketAccessToken gitlabAccessToken
@@ -271,12 +271,12 @@ listParser bitbucketAccessToken gitlabAccessToken =
         <*> switch
             ( short 'c'
            <> long "only-changed"
-           <> help ("Only list GitLab repositoies with commits that missing in corresponding BitBucket repositories. " <> availableOnlyInImportedMode)
+           <> help ("Only list GitLab repositories with commits that missing in corresponding BitBucket repositories. " <> availableOnlyInImportedMode)
             )
         <*> switch
             ( short 'C'
            <> long "skip-changed"
-           <> help ("Do not list GitLab repositoies with commits that missing in corresponding BitBucket repositories. " <> availableOnlyInImportedMode)
+           <> help ("Do not list GitLab repositories with commits that missing in corresponding BitBucket repositories. " <> availableOnlyInImportedMode)
             )
         <*> skipDocPartJustParser
         <*> onlyDocPartJustParser
