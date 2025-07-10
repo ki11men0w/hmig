@@ -142,7 +142,7 @@ options bitbucketAccessToken gitlabAccessToken = Options
                                          \ In this way, you can import only part of the repositories, and then the remaining ones.\
                                          \ Alternatively, you can make sure that all repositories have already been\
                                          \ imported if no repositories are offered for import.\
-                                         \ If you need to reimport an existing repository in GitHub, then you first need to delete it.\
+                                         \ If you need to reimport an existing repository in GitLab, then you first need to delete it.\
                                          \ This can be done, for example, with the `clean` command of this utility."))
         <>
         command "clean" (info
