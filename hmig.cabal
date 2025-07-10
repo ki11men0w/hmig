@@ -1,17 +1,17 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.36.0.
+-- This file has been generated from package.yaml by hpack version 0.38.0.
 --
 -- see: https://github.com/sol/hpack
 
 name:           hmig
-version:        0.2.0.6
+version:        0.2.0.7
 synopsis:       An interactive command line utility designed to help migrate `git` repositories from BitBucket to GitLab
 description:    Please see the README.md
 category:       Git,Utils,BitBucket,GitLab
 author:         Maksim Golubev
 maintainer:     maksim.golubev@nexign.com
-copyright:      2024 Maksim Golubev
+copyright:      2025 Maksim Golubev
 license:        BSD3
 build-type:     Simple
 extra-source-files:
